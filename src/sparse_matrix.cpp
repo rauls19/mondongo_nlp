@@ -2,7 +2,7 @@
 #include <vector>
 #include <cassert>
 
-#include "sparse_matrix.h"
+#include "..\include\sparse_matrix.h"
 
 using namespace std;
 
@@ -21,6 +21,7 @@ void csr_matrix::create_sparse_matrix(vector<size_t> indptr, vector<size_t> indi
 
 void csr_matrix::create_sparse_matrix(vector<vector<double>> matrix){}
 
+csr_matrix::csr_matrix(){}
 csr_matrix::csr_matrix(int row, int col){}
 csr_matrix::csr_matrix(vector<double> data, int row, int col){}
 csr_matrix::csr_matrix(vector<size_t> indptr, vector<size_t> indices, vector<double> data){

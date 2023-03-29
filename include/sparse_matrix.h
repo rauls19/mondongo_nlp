@@ -27,8 +27,8 @@ class csr_matrix{
     csr_matrix(vector<size_t> indptr, vector<size_t> indices, vector<double> data);
     csr_matrix(vector<vector<double>> matrix);
 
-    csr_matrix tocsr();
-    csr_matrix toarray();
+    // csr_matrix tocsr();
+    // csr_matrix toarray();
 
 };
 

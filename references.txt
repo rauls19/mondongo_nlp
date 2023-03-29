@@ -3,3 +3,9 @@ Stop words is taken from the "Glasgow Information
 # http://ir.dcs.gla.ac.uk/resources/linguistic_utils/stop_words
 Scipy - Sparse matrix 
 # https://docs.scipy.org/doc/scipy/reference/generated/scipy.sparse.csr_matrix.html
+Cmake:
+rm build
+mkdir build
+cd build
+cmake -DCMAKE_BUILD_TYPE=Debug ..
+cmake --build ..
