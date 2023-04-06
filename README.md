@@ -45,7 +45,7 @@ auto x = tfidf.fit_transform(corpus_file_b);
 
 ### Performance Results
 
-Shape test data: 393.736 documents
+For 393.736 documents:
 
 | Spec.        | Exec. time |
 | ---------    | ------     |
