@@ -23,7 +23,7 @@ Trying to be scikit-learn but worse.
 
 ### Code
 
-```
+```python
 from sklearn.feature_extraction.text import TfidfVectorizer
 import pandas as pd
 
@@ -32,7 +32,7 @@ vectorizer = TfidfVectorizer(stop_words="english")
 X = vectorizer.fit_transform(df['text'].values)
 ```
 
-```
+```c++
 /* READ DATA */
 
 TFIDF tfidf = TFIDF("en");
