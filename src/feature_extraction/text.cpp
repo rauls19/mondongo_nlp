@@ -16,17 +16,13 @@
 using namespace std;
 
 // TODOs:
-// TODO: fit_transform function
-// TODO: transform function
+// TODO: parallelism exection?
+// TODO: check what happens when one word in doc
 // TODO: toarray() function
 // TODO: pointers etc
 // TODO: put everything in a well format, using OOP?, virtual?, ...?
-// TODO: parallelism exection
-// TODO: check what happens when one word in doc
-// TODO: find huge text and compare results with python
 // TODO: make something to be able to execute it, like cmake or whatever
 // TODO: redefine TF calculation, somehow normalize
-// TODO: Compare results with python code (Speed and Memory print)
 
 
 class Tokenizer{
@@ -52,7 +48,7 @@ class Tokenizer{
         assert(find(valid_lang.begin(), valid_lang.end(), lang) != valid_lang.end() && "Stopwords requested are not supported");
         load_stopwords(lang);
     }
-
+    
     vector<vector<string>> fit_transform(const vector<string>& sentences){
         vector<vector<string>> tokens;
         for(auto line : sentences){
@@ -113,10 +109,11 @@ class TFIDF{
         // idf = math.log((1 + n) / (1 + df_t)) + 1
         unordered_map<string, double> words_idf;
         size_t n_docs = tokens.size();
-        for(auto sentence : tokens)
-            for(auto word : words)
-                if(find(sentence.begin(), sentence.end(), word) != sentence.end())
-                    words_idf[word]++;
+        for(auto sentence : tokens){
+            set<string> unique_words(sentence.begin(), sentence.end());
+            for(auto& word : unique_words)
+                words_idf[word]++;
+        }
         for(auto word : words)
             words_idf[word] = log((1+n_docs) / (1+words_idf[word])) + 1;
         return words_idf;
@@ -158,6 +155,8 @@ class TFIDF{
         for(size_t d=0; d<tf.size(); d++){
             for(auto w : tf.at(d)){
                 indices.push_back(vocabulary[w.first]);
+                if (w.second == 1)
+                    w.second = w.second / _idf[w.first];
                 data.push_back(w.second * _idf[w.first]);
             }
             indptr.push_back(indices.size());

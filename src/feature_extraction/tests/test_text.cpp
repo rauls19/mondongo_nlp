@@ -97,7 +97,7 @@ bool tfidf_vocabulary_test(){
 
 bool tfidf_transform_test(){
    vector<size_t> indptr = {0, 1, 3, 3, 4};
-   vector<double> data = {1.2231435513142097, 0.638763577291385, 0.8154290342094731, 1.2231435513142097};
+   vector<double> data = {1.0, 0.638763577291385, 0.8154290342094731, 1.0};
    vector<size_t> indices = {0, 1, 0, 0};
    csr_matrix spm_res = csr_matrix(indptr, indices, data);
     vector<string> corpus {
@@ -119,7 +119,7 @@ bool tfidf_transform_test(){
 
 bool tfidf_fit_transform_test(){
    vector<size_t> indptr = {0, 1, 3, 3, 4};
-   vector<double> data = {1.2231435513142097, 0.638763577291385, 0.8154290342094731, 1.2231435513142097};
+   vector<double> data = {1.0, 0.638763577291385, 0.8154290342094731, 1.0};
    vector<size_t> indices = {0, 1, 0, 0};
    csr_matrix spm_res = csr_matrix(indptr, indices, data);
     vector<string> corpus {
