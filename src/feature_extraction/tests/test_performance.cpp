@@ -20,7 +20,7 @@ int main(){
     else{
         cerr << "Could not load Descriptions file" << endl;
     }
-    //coroutines? threads? sth
+    
     TFIDF tfidf = TFIDF("en");
     auto iniT = chrono::high_resolution_clock::now();
     auto x = tfidf.fit_transform(corpus_file_b);
@@ -30,3 +30,14 @@ int main(){
     return 0;
     // 6min process 393.736 sentences vs 20 secs sklearn
 }
+
+/*
+
+Time taken by Tokenizer: 84 seconds
+Time taken by TF parallel: 56 seconds
+Time taken by IDF: 85 seconds
+Time taken by create_map_vocabulary: 70 seconds
+~30s build matrix
+Time taken by function: 330 seconds
+
+*/

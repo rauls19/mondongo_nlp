@@ -10,6 +10,10 @@
 #include <set>
 #include <map>
 #include <utility>
+#include <execution>
+#include <chrono>
+#include <thread>
+#include <mutex>
 
 #include "..\sparse_matrix.cpp"
 
@@ -51,25 +55,27 @@ class Tokenizer{
     
     vector<vector<string>> fit_transform(const vector<string>& sentences){
         vector<vector<string>> tokens;
-        for(auto line : sentences){
-            line.erase(remove_if(line.begin(), line.end(), ::ispunct), line.end());
-            transform(line.begin(), line.end(), line.begin(), ::tolower);
-            istringstream is(line);
+        tokens.reserve(sentences.size());
+        for(const auto& line : sentences){
+            string lowercase_line(line);
+            lowercase_line.erase(remove_if(lowercase_line.begin(), lowercase_line.end(), ::ispunct), lowercase_line.end());
+            transform(lowercase_line.begin(), lowercase_line.end(), lowercase_line.begin(), ::tolower);
+            istringstream is(lowercase_line);
             string aux;
             vector<string> tok;
             while(getline(is, aux, ' ')){
                 if(!(find(en_sw.begin(), en_sw.end(), aux) != en_sw.end())){
-                    tok.push_back(aux);
+                    tok.push_back(move(aux));
                 }
             }
-            tokens.push_back(tok);
+            tokens.push_back(move(tok));
         }
         return tokens;
     }
 
-    void visualize(vector<vector<string>> &tokens){
-        for(auto i : tokens){
-            for(auto j : i){
+    void visualize(vector<vector<string>> &tokens) const{
+        for(const auto& i : tokens){
+            for(const auto& j : i){
                 cout << j + " ";
             }
             cout << "\n";
@@ -81,49 +87,55 @@ class Tokenizer{
 class TFIDF{
     private:
     string sw;
-    mutable vector<unordered_map<string, double>> tf;
+    vector<unordered_map<string, double>> tf;
 
 
-    void create_map_vocabulary(set<string> vocab_keys) const{
+    void create_map_vocabulary(const set<string>& vocab_keys){
         size_t i = 0;
-        for(string word : vocab_keys){
-            this->vocabulary[word] = i;
+        for(const auto& word : vocab_keys){
+            vocabulary[word] = i;
             i++;
-        }        
+        }
     }
 
-    unordered_map<string, double> TF(vector<string> sentence) const{
+    void TF(vector<string> sentence){
         // tf(w, d) = f(w, d)
         // f(w, d) = # appears / words document
+        //Segmentation error somewhere
         unordered_map<string, double> words_tf;
-        for(int i=0; i<sentence.size(); i++)
-            words_tf[sentence.at(i)]++;
-        for(auto w : words_tf)
-            words_tf[w.first] = w.second / sentence.size();
-        return words_tf;
+        words_tf.reserve(sentence.size()); // Pre-allocate memory
+        for(const auto& w : sentence)
+            words_tf[w]++;
+        const double norm = 1.0 / sentence.size(); // Compute normalization value outside the loop
+        for(auto& w : words_tf)
+            w.second *= norm;
+        tf.push_back(move(words_tf)); // Use move semantics
     }
-    unordered_map<string, double> IDF(vector<vector<string>> tokens, set<string> words) const{
+
+    unordered_map<string, double> IDF(vector<vector<string>> tokens, const set<string>& words){
         // idf(w, D) = log(N/f(w, D))
         // n = 4 # number of documents
         // df_t = 1
         // idf = math.log((1 + n) / (1 + df_t)) + 1
         unordered_map<string, double> words_idf;
         size_t n_docs = tokens.size();
-        for(auto sentence : tokens){
+        // could be done parallel
+        for(const auto& sentence : tokens){
             set<string> unique_words(sentence.begin(), sentence.end());
             for(auto& word : unique_words)
                 words_idf[word]++;
         }
-        for(auto word : words)
+        // could be done parallel
+        for(const auto& word : words)
             words_idf[word] = log((1+n_docs) / (1+words_idf[word])) + 1;
         return words_idf;
     }
 
     public:
 
-    mutable map<string, size_t> vocabulary;
+    map<string, size_t> vocabulary;
     csr_matrix csr_tfidf;
-    mutable unordered_map<string, double> _idf;
+    unordered_map<string, double> _idf;
 
 
     TFIDF(string stopwords=""){
@@ -131,20 +143,38 @@ class TFIDF{
     }
     
     TFIDF& fit(const vector<string>& raw_document){
-        return const_cast<TFIDF&>(as_const(*this).fit(raw_document));
-    }
-
-    const TFIDF& fit(const vector<string>& raw_document) const{
         Tokenizer tokenizer = Tokenizer(sw);
+        auto iniT = chrono::high_resolution_clock::now();
         auto tokens = tokenizer.fit_transform(raw_document);
+        auto endT = chrono::high_resolution_clock::now();
+        auto exec_time = chrono::duration_cast<chrono::seconds>(endT - iniT);
+        cout << "Time taken by Tokenizer: " << exec_time.count() << " seconds" << endl;
         set<string> vocab_keys;
-        for(auto tok : tokens){
-            auto aux = TF(tok);
-            tf.push_back(aux);
+        for(const auto& tok : tokens){
             vocab_keys.insert(tok.begin(), tok.end());
         }
-        _idf = IDF(tokens, vocab_keys);
+        iniT = chrono::high_resolution_clock::now();
+        //thread t_create_map(&TFIDF::create_map_vocabulary, this, cref(vocab_keys));
         create_map_vocabulary(vocab_keys);
+        vector<thread> threads;
+        threads.reserve(tokens.size());
+        for(const auto& tok : tokens) {
+            threads.emplace_back(&TFIDF::TF, this, move(tok));
+        }
+        for(auto& t : threads){
+            t.join();
+        }
+        //t_create_map.join();
+        endT = chrono::high_resolution_clock::now();
+        exec_time = chrono::duration_cast<chrono::seconds>(endT - iniT);
+        cout << "Time taken by TF sequential: " << exec_time.count() << " seconds" << endl;
+        
+        iniT = chrono::high_resolution_clock::now();
+        _idf = IDF(tokens, vocab_keys); // time consuming
+        endT = chrono::high_resolution_clock::now();
+        exec_time = chrono::duration_cast<chrono::seconds>(endT - iniT);
+        cout << "Time taken by IDF: " << exec_time.count() << " seconds" << endl;
+
         return *this;
     }
 
