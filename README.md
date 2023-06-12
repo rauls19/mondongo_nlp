@@ -6,7 +6,6 @@ Trying to be scikit-learn but worse.
 
 - TF-IDF
 - Tokenizer
-- Sparse matrix
 
 ## Languages supported:
 
