@@ -50,4 +50,4 @@ For 393.736 documents:
 | Spec.        | Exec. time |
 | ---------    | ------     |
 | scikit-learn | 30s        |
-| mondongo_nlp | 4 min      |
+| mondongo_nlp | 3 min      |
