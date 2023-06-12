@@ -5,28 +5,31 @@
 #include <algorithm>
 #include <sstream>
 #include <unordered_map>
+#include <utility>
 #include <cmath>
 #include <cassert>
 #include <set>
 #include <map>
-#include <utility>
 #include <execution>
 #include <chrono>
 #include <thread>
 #include <mutex>
+#include <numeric>
+#include <future>
 
-#include "..\sparse_matrix.cpp"
+#include "..\..\third_party\eigen3\Eigen\Sparse"
+#include "..\..\third_party\eigen3\Eigen\SparseCore"
+#include "..\..\third_party\eigen3\Eigen\Dense"
 
+using namespace Eigen;
 using namespace std;
 
 // TODOs:
-// TODO: parallelism exection?
-// TODO: check what happens when one word in doc
-// TODO: toarray() function
+// TODO: Tokenizer takes forever
+// TODO: Clearn includes
 // TODO: pointers etc
 // TODO: put everything in a well format, using OOP?, virtual?, ...?
 // TODO: make something to be able to execute it, like cmake or whatever
-// TODO: redefine TF calculation, somehow normalize
 
 
 class Tokenizer{
@@ -88,61 +91,102 @@ class TFIDF{
     private:
     string sw;
     vector<unordered_map<string, double>> tf;
+    SparseMatrix<double> _tf_idf_spm;
 
 
     void create_map_vocabulary(const set<string>& vocab_keys){
         size_t i = 0;
+        // Parallel?
         for(const auto& word : vocab_keys){
             vocabulary[word] = i;
+            reverse_vocabulary[i] = word;
             i++;
         }
     }
 
-    void TF(vector<string> sentence){
+    SparseMatrix<double> convert_to_sparsematrix(size_t col_dim){
+        SparseMatrix<double> spm(tf.size(), col_dim);
+        vector<Triplet<double>> triplets; // Store nonzero entries
+        #pragma omp parallel for schedule(guided) reduction(+:triplets)
+        {
+            for(size_t i=0; i<tf.size(); i++){
+                const auto& sentence = tf[i];
+                for(const auto&[word, count] : sentence)
+                    triplets.push_back(Triplet<double>(i, vocabulary[word], count));
+            }
+        }
+        spm.setFromTriplets(triplets.begin(), triplets.end());
+        spm.makeCompressed();
+        spm.finalize();
+        return spm;
+    }
+
+    VectorXd  inverse_document_frequency(const SparseMatrix<double>& tf_new){
+        size_t n_cols = tf_new.cols();
+        VectorXd idf_new(n_cols); // TODO: SparseVector?
+        idf_new.setZero();
+        #pragma omp parallel for schedule(guided) num_threads(8)
+        for(size_t i=0; i<n_cols; i++){
+            int cnt = 0;
+            for(SparseMatrix<double>::InnerIterator it(tf_new, i); it; ++it){
+                if(it.value() != 0)
+                    cnt++;
+            }
+            idf_new.coeffRef(i) = log((double)(1+tf_new.rows())/(1+cnt)) + 1;
+        }
+        return idf_new.transpose();
+    }
+
+    unordered_map<string, double> term_frequency(const vector<string>& sentence){
         // tf(w, d) = f(w, d)
         // f(w, d) = # appears / words document
-        //Segmentation error somewhere
         unordered_map<string, double> words_tf;
         words_tf.reserve(sentence.size()); // Pre-allocate memory
         for(const auto& w : sentence)
-            words_tf[w]++;
+            ++words_tf[w];
         const double norm = 1.0 / sentence.size(); // Compute normalization value outside the loop
         for(auto& w : words_tf)
             w.second *= norm;
-        tf.push_back(move(words_tf)); // Use move semantics
+        return words_tf;
     }
 
-    unordered_map<string, double> IDF(vector<vector<string>> tokens, const set<string>& words){
-        // idf(w, D) = log(N/f(w, D))
-        // n = 4 # number of documents
-        // df_t = 1
-        // idf = math.log((1 + n) / (1 + df_t)) + 1
-        unordered_map<string, double> words_idf;
-        size_t n_docs = tokens.size();
-        // could be done parallel
-        for(const auto& sentence : tokens){
-            set<string> unique_words(sentence.begin(), sentence.end());
-            for(auto& word : unique_words)
-                words_idf[word]++;
+    SparseMatrix<double> term_freq_inverse_doc_freq(SparseMatrix<double> tf_spm, const VectorXd& idf_vxd){
+        #pragma omp parallel for schedule(guided) num_threads(8)
+        {
+            for(size_t i=0; i<tf_spm.cols(); ++i){
+                for(SparseMatrix<double>::InnerIterator it(tf_spm, i); it; ++it){
+                    it.valueRef() *= idf_vxd.coeffRef(i); 
+                }
+            }
         }
-        // could be done parallel
-        for(const auto& word : words)
-            words_idf[word] = log((1+n_docs) / (1+words_idf[word])) + 1;
-        return words_idf;
+        return tf_spm;
     }
 
     public:
 
-    map<string, size_t> vocabulary;
-    csr_matrix csr_tfidf;
-    unordered_map<string, double> _idf;
+    unordered_map<string, size_t> vocabulary;
+    map<size_t, string> reverse_vocabulary;
+    VectorXd _idf;
 
 
     TFIDF(string stopwords=""){
         sw = stopwords;
     }
     
+    template <typename T>
+
+    void visualize_sparse_matrix(SparseMatrix<T> ex_spm){
+        cout << "Matrix (" << ex_spm.rows() <<"x"<< ex_spm.cols() << ")" << endl;
+        for(size_t i=0; i<ex_spm.rows(); ++i)
+            cout << ex_spm.row(i);
+    }
+
     TFIDF& fit(const vector<string>& raw_document){
+        // TODO: Only validations
+        return *this;
+    }
+
+    shared_ptr<SparseMatrix<double>> transform(const vector<string>& raw_document){
         Tokenizer tokenizer = Tokenizer(sw);
         auto iniT = chrono::high_resolution_clock::now();
         auto tokens = tokenizer.fit_transform(raw_document);
@@ -156,45 +200,51 @@ class TFIDF{
         iniT = chrono::high_resolution_clock::now();
         //thread t_create_map(&TFIDF::create_map_vocabulary, this, cref(vocab_keys));
         create_map_vocabulary(vocab_keys);
-        vector<thread> threads;
-        threads.reserve(tokens.size());
-        for(const auto& tok : tokens) {
-            threads.emplace_back(&TFIDF::TF, this, move(tok));
-        }
-        for(auto& t : threads){
-            t.join();
-        }
-        //t_create_map.join();
         endT = chrono::high_resolution_clock::now();
         exec_time = chrono::duration_cast<chrono::seconds>(endT - iniT);
-        cout << "Time taken by TF sequential: " << exec_time.count() << " seconds" << endl;
-        
+        cout << "Time taken by create_map_vocabulary sequential: " << exec_time.count() << " seconds" << endl;
+
+        vector<unordered_map<string, double>> aux_tf;
+        aux_tf.reserve(tokens.size());
         iniT = chrono::high_resolution_clock::now();
-        _idf = IDF(tokens, vocab_keys); // time consuming
+        #pragma omp parallel for schedule(guided) num_threads(8)
+        {
+            for (size_t i=0; i < tokens.size(); i++) {
+                const auto& sentence = tokens.at(i);
+                aux_tf.push_back(term_frequency(sentence));
+            }
+        }
         endT = chrono::high_resolution_clock::now();
         exec_time = chrono::duration_cast<chrono::seconds>(endT - iniT);
-        cout << "Time taken by IDF: " << exec_time.count() << " seconds" << endl;
+        cout << "Time taken by TF old guided: " << exec_time.count() << " seconds" << endl;
+        this->tf = aux_tf;
 
-        return *this;
+        iniT = chrono::high_resolution_clock::now();
+        SparseMatrix<double> tf_spm = convert_to_sparsematrix(vocab_keys.size());
+        endT = chrono::high_resolution_clock::now();
+        exec_time = chrono::duration_cast<chrono::seconds>(endT - iniT);
+        cout << "Time taken by Convert to SparseMatrix: " << exec_time.count() << " seconds" << endl;
+
+
+        iniT = chrono::high_resolution_clock::now();
+        this->_idf = inverse_document_frequency(tf_spm);
+        endT = chrono::high_resolution_clock::now();
+        exec_time = chrono::duration_cast<chrono::seconds>(endT - iniT);
+        cout << "Time taken by idf: " << exec_time.count() << " seconds" << endl;
+
+        iniT = chrono::high_resolution_clock::now();
+        this->_tf_idf_spm = term_freq_inverse_doc_freq(tf_spm, this->_idf);
+        endT = chrono::high_resolution_clock::now();
+        exec_time = chrono::duration_cast<chrono::seconds>(endT - iniT);
+        cout << "Time taken by transform: " << exec_time.count() << " seconds" << endl;
+        this->_tf_idf_spm.makeCompressed();
+        this->_tf_idf_spm.finalize();
+        return make_shared<SparseMatrix<double>>(this->_tf_idf_spm); //TODO: Problem returning huge objects, take a lot of time
     }
 
-    csr_matrix transform(const vector<string>& raw_document){
-        vector<size_t> indptr = {0};
-        vector<size_t> indices;
-        vector<double> data;
-        for(size_t d=0; d<tf.size(); d++){
-            for(auto w : tf.at(d)){
-                indices.push_back(vocabulary[w.first]);
-                if (w.second == 1)
-                    w.second = w.second / _idf[w.first];
-                data.push_back(w.second * _idf[w.first]);
-            }
-            indptr.push_back(indices.size());
-        }
-        return csr_matrix(indptr, indices, data);
-    }
-
-    csr_matrix fit_transform(const vector<string>& raw_document){
-        return fit(raw_document).transform(raw_document);
+    SparseMatrix<double> fit_transform(const vector<string>& raw_document){
+        fit(raw_document);
+        auto result = transform(raw_document);
+        return *result;
     }
 };
