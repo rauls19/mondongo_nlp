@@ -66,7 +66,7 @@ SparseMatrix<double> generate_example_spm(vector<vector<double>> data){
 }
 
 bool tfidf_transform_test(){
-    vector<vector<double>> data = {{1.2231435513142097, 0}, {0.8154290342094731, 0.638763577291385}, {0, 0}, {1.2231435513142097, 0}};
+    vector<vector<double>> data = {{1.0, 0}, {0.8154290342094731, 0.638763577291385}, {0, 0}, {1.0, 0}};
     SparseMatrix<double> spm_res = generate_example_spm(data);
     vector<string> corpus {
         "This is the first document.",
@@ -75,21 +75,18 @@ bool tfidf_transform_test(){
         "Is this the first document?"
     };
     TFIDF tfidf = TFIDF("en");
-    /*
-    auto x = tfidf.fit(corpus).transform(corpus);
+    auto x = *tfidf.fit(corpus).transform(corpus);
     if(x.size() != spm_res.size() && x.rows() == spm_res.rows() && x.cols() == spm_res.cols())
         return false;
-    tfidf.visualize_sparse_matrix(spm_res);
-    tfidf.visualize_sparse_matrix(x);
     for(size_t i=0; i<x.rows(); ++i)
         for(size_t j=0; j<x.cols(); ++j)
             if(x.coeffRef(i, j) != spm_res.coeffRef(i, j))
-                return false;*/
+                return false;
     return true;
 }
 
 bool tfidf_fit_transform_test(){
-    vector<vector<double>> data = {{1.2231435513142097, 0}, {0.8154290342094731, 0.638763577291385}, {0, 0}, {1.2231435513142097, 0}};
+    vector<vector<double>> data = {{1.0, 0}, {0.8154290342094731, 0.638763577291385}, {0, 0}, {1.0, 0}};
     SparseMatrix<double> spm_res = generate_example_spm(data);
     vector<string> corpus {
         "This is the first document.",

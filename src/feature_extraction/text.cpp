@@ -26,6 +26,8 @@ using namespace std;
 
 // TODOs:
 // TODO: Tokenizer takes forever
+// TODO: Return SparseMatrix takes forever
+// TODO: Apply max_dt & min_df
 // TODO: Clearn includes
 // TODO: pointers etc
 // TODO: put everything in a well format, using OOP?, virtual?, ...?
@@ -92,11 +94,12 @@ class TFIDF{
     string sw;
     vector<unordered_map<string, double>> tf;
     SparseMatrix<double> _tf_idf_spm;
+    double max_df = 1.0, min_df = 0.0;
 
 
     void create_map_vocabulary(const set<string>& vocab_keys){
         size_t i = 0;
-        // Parallel?
+        // TODO: Parallel?
         for(const auto& word : vocab_keys){
             vocabulary[word] = i;
             reverse_vocabulary[i] = word;
@@ -169,8 +172,10 @@ class TFIDF{
     VectorXd _idf;
 
 
-    TFIDF(string stopwords=""){
+    TFIDF(string stopwords="", double max_df=1.0, double min_df=0.0){
         sw = stopwords;
+        this->max_df = max_df;
+        this->min_df = min_df;
     }
     
     template <typename T>
@@ -183,6 +188,8 @@ class TFIDF{
 
     TFIDF& fit(const vector<string>& raw_document){
         // TODO: Only validations
+        if(max_df > 1.0 || max_df < 0.0) // If out of the range then default
+            max_df = 1.0;
         return *this;
     }
 
@@ -237,9 +244,18 @@ class TFIDF{
         endT = chrono::high_resolution_clock::now();
         exec_time = chrono::duration_cast<chrono::seconds>(endT - iniT);
         cout << "Time taken by transform: " << exec_time.count() << " seconds" << endl;
+        
+        this->_tf_idf_spm.prune([&](int row, int col, double value){return value > 0.001; }); // Prune values smaller than 0.001
+        this->_tf_idf_spm = this->_tf_idf_spm.unaryExpr([](double value) -> double {
+            if(value > 1.0)    
+                return 1.0;
+            else
+                return value;
+        });
         this->_tf_idf_spm.makeCompressed();
         this->_tf_idf_spm.finalize();
-        return make_shared<SparseMatrix<double>>(this->_tf_idf_spm); //TODO: Problem returning huge objects, take a lot of time
+
+        return make_shared<SparseMatrix<double>>(move(this->_tf_idf_spm)); //TODO: Problem returning huge objects, take a lot of time
     }
 
     SparseMatrix<double> fit_transform(const vector<string>& raw_document){
