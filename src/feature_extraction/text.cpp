@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <sstream>
 #include <unordered_map>
+#include <unordered_set>
 #include <utility>
 #include <cmath>
 #include <cassert>
@@ -36,7 +37,7 @@ using namespace std;
 
 class Tokenizer{
     private:
-    vector<string> en_sw;
+    unordered_set<string> en_sw;
     const vector<string> valid_lang = {"en"};
 
     void load_stopwords(string lang){
@@ -44,12 +45,26 @@ class Tokenizer{
         if(en_stopwords){
             string line;
             while(getline(en_stopwords, line)){
-                en_sw.push_back(line);
+                en_sw.insert(line);
             }
         }
         else{
             cerr << "Could not load English stopwords" << endl;
         }
+    }
+
+    vector<string> preprocess_sentence(const vector<string>& sentences){
+        vector<string> preprocessed_sentences(sentences.size());
+        regex punctuation_pattern("[^a-zA-Z0-9 ]");
+
+        #pragma omp parallel for schedule(guided) num_threads(8)
+        for(size_t i = 0; i < sentences.size(); i++){
+            string lowercase_line(sentences[i]);
+            lowercase_line.erase(remove_if(lowercase_line.begin(), lowercase_line.end(), ::ispunct), lowercase_line.end());
+            transform(lowercase_line.begin(), lowercase_line.end(), lowercase_line.begin(), ::tolower);
+            preprocessed_sentences[i] = move(lowercase_line);
+        }
+        return preprocessed_sentences;
     }
 
     public:
@@ -59,26 +74,26 @@ class Tokenizer{
     }
     
     vector<vector<string>> fit_transform(const vector<string>& sentences){
-        vector<vector<string>> tokens;
-        tokens.reserve(sentences.size());
-        for(const auto& line : sentences){
-            string lowercase_line(line);
-            lowercase_line.erase(remove_if(lowercase_line.begin(), lowercase_line.end(), ::ispunct), lowercase_line.end());
-            transform(lowercase_line.begin(), lowercase_line.end(), lowercase_line.begin(), ::tolower);
-            istringstream is(lowercase_line);
+        vector<vector<string>> tokens(sentences.size());
+        
+        auto preprocessed_sentences = preprocess_sentence(sentences);
+
+        #pragma omp parallel for schedule(guided) num_threads(8)
+        for(const auto& line : preprocessed_sentences){
+            istringstream is(line);
             string aux;
             vector<string> tok;
             while(getline(is, aux, ' ')){
-                if(!(find(en_sw.begin(), en_sw.end(), aux) != en_sw.end())){
-                    tok.push_back(move(aux));
+                if(en_sw.count(aux) == 0){
+                    tok.emplace_back(move(aux));
                 }
             }
-            tokens.push_back(move(tok));
+            tokens.emplace_back(move(tok));
         }
         return tokens;
     }
 
-    void visualize(vector<vector<string>> &tokens) const{
+    void visualize_tokens(vector<vector<string>> &tokens) const{
         for(const auto& i : tokens){
             for(const auto& j : i){
                 cout << j + " ";
