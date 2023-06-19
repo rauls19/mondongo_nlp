@@ -55,7 +55,6 @@ class Tokenizer{
 
     vector<string> preprocess_sentence(const vector<string>& sentences){
         vector<string> preprocessed_sentences(sentences.size());
-        regex punctuation_pattern("[^a-zA-Z0-9 ]");
 
         #pragma omp parallel for schedule(guided) num_threads(8)
         for(size_t i = 0; i < sentences.size(); i++){
