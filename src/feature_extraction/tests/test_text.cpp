@@ -96,11 +96,12 @@ bool tfidf_fit_transform_test(){
     };
     TFIDF tfidf = TFIDF("en");
     auto x = tfidf.fit_transform(corpus);
-    if(x.size() != spm_res.size() && x.rows() == spm_res.rows() && x.cols() == spm_res.cols())
+    SparseMatrix<double>& res_x = *x;
+    if(res_x.size() != spm_res.size() && res_x.rows() == spm_res.rows() && res_x.cols() == spm_res.cols())
         return false;
-    for(size_t i=0; i<x.rows(); ++i)
-        for(size_t j=0; j<x.cols(); ++j)
-            if(x.coeffRef(i, j) != spm_res.coeffRef(i, j))
+    for(size_t i=0; i<res_x.rows(); ++i)
+        for(size_t j=0; j<res_x.cols(); ++j)
+            if(res_x.coeffRef(i, j) != spm_res.coeffRef(i, j))
                 return false;
     return true;
 }

@@ -209,25 +209,15 @@ class TFIDF{
 
     shared_ptr<SparseMatrix<double>> transform(const vector<string>& raw_document){
         Tokenizer tokenizer = Tokenizer(sw);
-        auto iniT = chrono::high_resolution_clock::now();
         auto tokens = tokenizer.fit_transform(raw_document);
-        auto endT = chrono::high_resolution_clock::now();
-        auto exec_time = chrono::duration_cast<chrono::seconds>(endT - iniT);
-        cout << "Time taken by Tokenizer: " << exec_time.count() << " seconds" << endl;
         set<string> vocab_keys;
         for(const auto& tok : tokens){
             vocab_keys.insert(tok.begin(), tok.end());
         }
-        iniT = chrono::high_resolution_clock::now();
-        //thread t_create_map(&TFIDF::create_map_vocabulary, this, cref(vocab_keys));
         create_map_vocabulary(vocab_keys);
-        endT = chrono::high_resolution_clock::now();
-        exec_time = chrono::duration_cast<chrono::seconds>(endT - iniT);
-        cout << "Time taken by create_map_vocabulary sequential: " << exec_time.count() << " seconds" << endl;
 
         vector<unordered_map<string, double>> aux_tf;
         aux_tf.reserve(tokens.size());
-        iniT = chrono::high_resolution_clock::now();
         #pragma omp parallel for schedule(guided) num_threads(8)
         {
             for (size_t i=0; i < tokens.size(); i++) {
@@ -235,29 +225,14 @@ class TFIDF{
                 aux_tf.push_back(term_frequency(sentence));
             }
         }
-        endT = chrono::high_resolution_clock::now();
-        exec_time = chrono::duration_cast<chrono::seconds>(endT - iniT);
-        cout << "Time taken by TF old guided: " << exec_time.count() << " seconds" << endl;
+
         this->tf = aux_tf;
 
-        iniT = chrono::high_resolution_clock::now();
         SparseMatrix<double> tf_spm = convert_to_sparsematrix(vocab_keys.size());
-        endT = chrono::high_resolution_clock::now();
-        exec_time = chrono::duration_cast<chrono::seconds>(endT - iniT);
-        cout << "Time taken by Convert to SparseMatrix: " << exec_time.count() << " seconds" << endl;
 
-
-        iniT = chrono::high_resolution_clock::now();
         this->_idf = inverse_document_frequency(tf_spm);
-        endT = chrono::high_resolution_clock::now();
-        exec_time = chrono::duration_cast<chrono::seconds>(endT - iniT);
-        cout << "Time taken by idf: " << exec_time.count() << " seconds" << endl;
 
-        iniT = chrono::high_resolution_clock::now();
         this->_tf_idf_spm = term_freq_inverse_doc_freq(tf_spm, this->_idf);
-        endT = chrono::high_resolution_clock::now();
-        exec_time = chrono::duration_cast<chrono::seconds>(endT - iniT);
-        cout << "Time taken by transform: " << exec_time.count() << " seconds" << endl;
         
         this->_tf_idf_spm.prune([&](int row, int col, double value){return value > 0.001; }); // Prune values smaller than 0.001
         this->_tf_idf_spm = this->_tf_idf_spm.unaryExpr([](double value) -> double {
@@ -272,9 +247,8 @@ class TFIDF{
         return make_shared<SparseMatrix<double>>(move(this->_tf_idf_spm)); //TODO: Problem returning huge objects, take a lot of time
     }
 
-    SparseMatrix<double> fit_transform(const vector<string>& raw_document){
+    shared_ptr<SparseMatrix<double>> fit_transform(const vector<string>& raw_document){
         fit(raw_document);
-        auto result = transform(raw_document);
-        return *result;
+        return transform(raw_document);
     }
 };
