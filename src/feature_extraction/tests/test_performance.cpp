@@ -2,7 +2,6 @@
 #include <fstream>
 #include <vector>
 #include <chrono>
-#include <algorithm>
 
 #include "..\text.cpp"
 
@@ -27,16 +26,4 @@ int main(){
     auto exec_time = chrono::duration_cast<chrono::seconds>(endT - iniT);
     cout << "Total time: " << exec_time.count() << " seconds" << endl;
     return 0;
-    // 6min process 393.736 sentences vs 20 secs sklearn
 }
-
-/*
-
-Time taken by Tokenizer: 84 seconds
-Time taken by TF parallel: 56 seconds
-Time taken by IDF: 85 seconds
-Time taken by create_map_vocabulary: 70 seconds
-~30s build matrix
-Time taken by function: 330 seconds
-
-*/

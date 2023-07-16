@@ -2,21 +2,11 @@
 #include <fstream>
 #include <vector>
 #include <string>
-#include <algorithm>
-#include <sstream>
 #include <unordered_map>
 #include <unordered_set>
-#include <utility>
-#include <cmath>
-#include <cassert>
 #include <set>
 #include <map>
 #include <execution>
-#include <chrono>
-#include <thread>
-#include <mutex>
-#include <numeric>
-#include <future>
 
 #include "..\..\third_party\eigen3\Eigen\Sparse"
 #include "..\..\third_party\eigen3\Eigen\SparseCore"
@@ -24,15 +14,6 @@
 
 using namespace Eigen;
 using namespace std;
-
-// TODOs:
-// TODO: Tokenizer takes forever
-// TODO: Return SparseMatrix takes forever
-// TODO: Apply max_dt & min_df
-// TODO: Clearn includes
-// TODO: pointers etc
-// TODO: put everything in a well format, using OOP?, virtual?, ...?
-// TODO: make something to be able to execute it, like cmake or whatever
 
 
 class Tokenizer{
@@ -73,7 +54,8 @@ class Tokenizer{
     }
     
     vector<vector<string>> fit_transform(const vector<string>& sentences){
-        vector<vector<string>> tokens(sentences.size());
+        vector<vector<string>> tokens;
+        tokens.reserve(sentences.size());
         
         auto preprocessed_sentences = preprocess_sentence(sentences);
 
@@ -226,7 +208,7 @@ class TFIDF{
             }
         }
 
-        this->tf = aux_tf;
+        this->tf = move(aux_tf);
 
         SparseMatrix<double> tf_spm = convert_to_sparsematrix(vocab_keys.size());
 
