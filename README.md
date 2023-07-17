@@ -1,11 +1,12 @@
 # Mondongo NLP
 
-Trying to be scikit-learn but worse.
+Trying to be scikit-learn but worse. From papers to code.
 
 ## Implementation of:
 
-- TF-IDF
 - Tokenizer
+- TF-IDF
+- CountVectorizer
 
 ## Languages supported:
 
@@ -20,7 +21,7 @@ Trying to be scikit-learn but worse.
 | RAM       |  16 GB                                                |
 | Processor | Intel(R) Core(TM) i5-10300H CPU @ 2.50GHz   2.50 GHz  |
 
-### Code
+### Code Example
 
 scikit-learn:
 
@@ -46,7 +47,10 @@ auto x = tfidf.fit_transform(corpus_file_b);
 
 For 393.736 documents:
 
-| Spec.        | Exec. time |
-| ---------    | ------     |
-| scikit-learn | 30s        |
-| mondongo_nlp | 150s (~2 min 50s)  |
+| Spec.                          | Exec. time   |
+| ---------                      | ------       |
+| TFIDF - scikit-learn           | 30s          |
+| TFIDF - mondongo_nlp           | 147s         |
+| CountVectorizer - scikit-learn | 21s          |
+| CountVectorizer - mondongo_nlp | 124s         |
+

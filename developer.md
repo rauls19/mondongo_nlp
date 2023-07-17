@@ -5,8 +5,8 @@
 - TODO: Optimize return SparseMatrix
 - TODO: Optimize set<string> unique words
 - TODO: Apply max_dt & min_df
-- TODO: put everything in a well format, using OOP?, virtual?, ...?
-- TODO: make something to be able to execute it, like cmake or whatever
+- TODO: Well format, using OOP?, virtual?, ...?
+- TODO: Make something to be able to execute it, like cmake or whatever
 
 ## Run time
 

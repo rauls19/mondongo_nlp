@@ -16,6 +16,50 @@ using namespace Eigen;
 using namespace std;
 
 
+class BaseEstimatorText{
+    private:
+    virtual unordered_map<string, double> term_frequency(const vector<string>& sentence) = 0;
+
+    protected:
+    unordered_map<string, size_t> vocabulary;
+    map<size_t, string> reverse_vocabulary;
+    vector<unordered_map<string, double>> tf;
+
+    public:
+    virtual shared_ptr<SparseMatrix<double>> transform(const vector<string>& raw_document) = 0;
+    virtual shared_ptr<SparseMatrix<double>> fit_transform(const vector<string>& raw_document) = 0;
+    void create_map_vocabulary(const set<string>& vocab_keys){
+        size_t i = 0;
+        for(const auto& word : vocab_keys){
+            vocabulary[word] = i;
+            reverse_vocabulary[i] = word;
+            i++;
+        }
+    }
+    void visualize_sparse_matrix(SparseMatrix<double>& ex_spm){
+        cout << "Matrix (" << ex_spm.rows() <<"x"<< ex_spm.cols() << ")" << endl;
+        for(size_t i=0; i<ex_spm.rows(); ++i)
+            cout << ex_spm.row(i);
+    }
+    
+    SparseMatrix<double> convert_to_sparsematrix(size_t col_dim) {
+        SparseMatrix<double> spm(tf.size(), col_dim);
+        vector<Triplet<double>> triplets; // Store nonzero entries
+        #pragma omp parallel for schedule(guided) reduction(+:triplets)
+        {
+            for(size_t i=0; i<tf.size(); i++){
+                const auto& sentence = tf[i];
+                for(const auto&[word, count] : sentence)
+                    triplets.push_back(Triplet<double>(i, vocabulary[word], count));
+            }
+        }
+        spm.setFromTriplets(triplets.begin(), triplets.end());
+        spm.makeCompressed();
+        spm.finalize();
+        return spm;
+    }
+};
+
 class Tokenizer{
     private:
     unordered_set<string> en_sw;
@@ -85,40 +129,12 @@ class Tokenizer{
 };
 
 
-class TFIDF{
+class TFIDF : public BaseEstimatorText {
     private:
     string sw;
-    vector<unordered_map<string, double>> tf;
+    //vector<unordered_map<string, double>> tf;
     SparseMatrix<double> _tf_idf_spm;
     double max_df = 1.0, min_df = 0.0;
-
-
-    void create_map_vocabulary(const set<string>& vocab_keys){
-        size_t i = 0;
-        // TODO: Parallel?
-        for(const auto& word : vocab_keys){
-            vocabulary[word] = i;
-            reverse_vocabulary[i] = word;
-            i++;
-        }
-    }
-
-    SparseMatrix<double> convert_to_sparsematrix(size_t col_dim){
-        SparseMatrix<double> spm(tf.size(), col_dim);
-        vector<Triplet<double>> triplets; // Store nonzero entries
-        #pragma omp parallel for schedule(guided) reduction(+:triplets)
-        {
-            for(size_t i=0; i<tf.size(); i++){
-                const auto& sentence = tf[i];
-                for(const auto&[word, count] : sentence)
-                    triplets.push_back(Triplet<double>(i, vocabulary[word], count));
-            }
-        }
-        spm.setFromTriplets(triplets.begin(), triplets.end());
-        spm.makeCompressed();
-        spm.finalize();
-        return spm;
-    }
 
     VectorXd  inverse_document_frequency(const SparseMatrix<double>& tf_new){
         size_t n_cols = tf_new.cols();
@@ -136,7 +152,7 @@ class TFIDF{
         return idf_new.transpose();
     }
 
-    unordered_map<string, double> term_frequency(const vector<string>& sentence){
+    unordered_map<string, double> term_frequency(const vector<string>& sentence) override {
         // tf(w, d) = f(w, d)
         // f(w, d) = # appears / words document
         unordered_map<string, double> words_tf;
@@ -162,34 +178,26 @@ class TFIDF{
     }
 
     public:
-
-    unordered_map<string, size_t> vocabulary;
-    map<size_t, string> reverse_vocabulary;
     VectorXd _idf;
-
 
     TFIDF(string stopwords="", double max_df=1.0, double min_df=0.0){
         sw = stopwords;
         this->max_df = max_df;
         this->min_df = min_df;
     }
-    
-    template <typename T>
 
-    void visualize_sparse_matrix(SparseMatrix<T> ex_spm){
-        cout << "Matrix (" << ex_spm.rows() <<"x"<< ex_spm.cols() << ")" << endl;
-        for(size_t i=0; i<ex_spm.rows(); ++i)
-            cout << ex_spm.row(i);
-    }
+    unordered_map<string, size_t> get_vocabulary(){ return vocabulary; }
 
-    TFIDF& fit(const vector<string>& raw_document){
+    TFIDF& fit(const vector<string>& raw_document) {
         // TODO: Only validations
-        if(max_df > 1.0 || max_df < 0.0) // If out of the range then default
-            max_df = 1.0;
+        if(this->max_df > 1.0 || this->max_df < 0.0) // If out of the range then default
+            this->max_df = 1.0;
+        if(this->max_df < this->min_df || this->min_df < 0.0)
+            min_df = 0;
         return *this;
     }
 
-    shared_ptr<SparseMatrix<double>> transform(const vector<string>& raw_document){
+    shared_ptr<SparseMatrix<double>> transform(const vector<string>& raw_document) override {
         Tokenizer tokenizer = Tokenizer(sw);
         auto tokens = tokenizer.fit_transform(raw_document);
         set<string> vocab_keys;
@@ -229,8 +237,74 @@ class TFIDF{
         return make_shared<SparseMatrix<double>>(move(this->_tf_idf_spm)); //TODO: Problem returning huge objects, take a lot of time
     }
 
-    shared_ptr<SparseMatrix<double>> fit_transform(const vector<string>& raw_document){
+    shared_ptr<SparseMatrix<double>> fit_transform(const vector<string>& raw_document) override {
         fit(raw_document);
         return transform(raw_document);
     }
+};
+
+
+class CountVectorizer : public BaseEstimatorText{
+    private:
+    string sw;
+    double max_df=1.0, min_df=0.0;
+    vector<unordered_map<string, double>> tf;
+
+    public:
+
+    CountVectorizer(string stopwords="", double max_df=1.0, double min_df=0.0){
+        this->sw = stopwords;
+        this->max_df = max_df;
+        this->min_df = min_df;
+    }
+
+    CountVectorizer& fit(const vector<string>& raw_document){
+        if(this->max_df > 1.0 || this->max_df < 0.0) // If out of the range then default
+            this->max_df = 1.0;
+        if(this->max_df < this->min_df || this->min_df < 0.0)
+            min_df = 0;
+        return *this;
+    }
+
+    unordered_map<string, size_t> get_vocabulary(){ return vocabulary; }
+
+    unordered_map<string, double> term_frequency(const vector<string>& sentence) override {
+        unordered_map<string, double> words_tf;
+        words_tf.reserve(sentence.size()); // Pre-allocate memory
+        for(const auto& w : sentence)
+            ++words_tf[w];
+        return words_tf;
+    }
+
+    shared_ptr<SparseMatrix<double>> transform(const vector<string>& raw_document) override {
+        Tokenizer tokenizer = Tokenizer(this->sw);
+        auto tokens = tokenizer.fit_transform(raw_document);
+        set<string> vocab_keys;
+        for(const auto& tok : tokens){
+            vocab_keys.insert(tok.begin(), tok.end());
+        }
+        create_map_vocabulary(vocab_keys);
+
+        vector<unordered_map<string, double>> aux_tf;
+        aux_tf.reserve(tokens.size());
+        #pragma omp parallel for schedule(guided) num_threads(8)
+        {
+            for (size_t i=0; i < tokens.size(); i++) {
+                const auto& sentence = tokens.at(i);
+                aux_tf.push_back(term_frequency(sentence));
+            }
+        }
+
+        this->tf = move(aux_tf);
+
+        SparseMatrix<double> tf_spm = convert_to_sparsematrix(vocab_keys.size());
+
+        return make_shared<SparseMatrix<double>>(move(tf_spm));
+    }
+
+    shared_ptr<SparseMatrix<double>> fit_transform(const vector<string>& raw_document) override {
+        fit(raw_document);
+        return transform(raw_document);
+    }
+
 };

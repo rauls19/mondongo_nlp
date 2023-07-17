@@ -24,6 +24,13 @@ int main(){
     auto x = tfidf.fit_transform(corpus_file_b);
     auto endT = chrono::high_resolution_clock::now();
     auto exec_time = chrono::duration_cast<chrono::seconds>(endT - iniT);
-    cout << "Total time: " << exec_time.count() << " seconds" << endl;
+    cout << "TFIDF Total time: " << exec_time.count() << " seconds" << endl;
+
+    CountVectorizer cntvec = CountVectorizer("en");
+    iniT = chrono::high_resolution_clock::now();
+    auto y = cntvec.fit_transform(corpus_file_b);
+    endT = chrono::high_resolution_clock::now();
+    exec_time = chrono::duration_cast<chrono::seconds>(endT - iniT);
+    cout << "CountVectorizer Total time: " << exec_time.count() << " seconds" << endl;
     return 0;
 }
