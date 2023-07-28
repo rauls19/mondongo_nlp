@@ -127,6 +127,27 @@ bool CountVectorizer_transform_test(){
     return true;
 }
 
+bool tfidf_custom_stop_words(){
+    vector<vector<double>> data = {{1.0, 0.0, 0.0}, {0.0, 1.0, 0.0}, {0.0, 0.0, 1.0}, {1.0, 0.0, 0.0}};
+    unordered_set<string> sw_custom = { "this", "is", "the", "document", "and", "one"}; // always minus
+    vector<string> corpus {
+        "This is the first document.",
+        "This document is the second document.",
+        "And this is the third one.",
+        "Is this the first document?"
+    };
+    SparseMatrix<double> spm_res = generate_example_spm(data);
+    TFIDF tfidf = TFIDF("en", sw_custom);
+    auto x = *tfidf.fit_transform(corpus);
+    if(x.size() != spm_res.size() && x.rows() == spm_res.rows() && x.cols() == spm_res.cols())
+        return false;
+    for(size_t i=0; i<x.rows(); ++i)
+        for(size_t j=0; j<x.cols(); ++j)
+            if(x.coeffRef(i, j) != spm_res.coeffRef(i, j))
+                return false;
+    return true;
+}
+
 bool tfidf_fit_transform_test(){
     vector<vector<double>> data = {{1.0, 0}, {0.8154290342094731, 0.638763577291385}, {0, 0}, {1.0, 0}};
     SparseMatrix<double> spm_res = generate_example_spm(data);
@@ -169,6 +190,28 @@ bool CountVectorizer_fit_transform_test(){
     return true;
 }
 
+bool CountVectorizer_custom_stop_words(){
+    vector<vector<double>> data = {{1.0, 0.0, 0.0}, {0.0, 1.0, 0.0}, {0.0, 0.0, 1.0}, {1.0, 0.0, 0.0}};
+    unordered_set<string> sw_custom = { "this", "is", "the", "document", "and", "one"}; // always minus
+    SparseMatrix<double> spm_res = generate_example_spm(data);
+    vector<string> corpus {
+        "This is the first document.",
+        "This document is the second document.",
+        "And this is the third one.",
+        "Is this the first document?"
+    };
+    CountVectorizer cntvec = CountVectorizer("en", sw_custom);
+    auto x = *cntvec.fit_transform(corpus);
+    if(x.size() != spm_res.size() && x.rows() == spm_res.rows() && x.cols() == x.cols())
+        return false;
+    for(size_t i=0; i<x.rows(); ++i)
+        for(size_t j=0; j<x.cols(); ++j)
+            if(x.coeffRef(i, j) != spm_res.coeffRef(i, j))
+                return false;
+    return true;
+
+}
+
 int main(){
     assert(get_feature_names_out_test() && "Failed test: tokenizer_test");
     assert(tfidf_vocabulary_test() && "Failed test: tfidf_test");
@@ -177,6 +220,8 @@ int main(){
     assert(CountVectorizer_vocabulary_test() && "Failed test: CountVectorizer_vocabulary_test");
     assert(CountVectorizer_transform_test() && "Failed test: CountVectorizer_transform_test");
     assert(CountVectorizer_fit_transform_test() && "Failed test: CountVectorizer_fit_transform_test");
+    assert(tfidf_custom_stop_words() && "Failed test: tfidf_custom_stop_words");
+    assert(CountVectorizer_custom_stop_words() && "Failed test: CountVectorizer_custom_stop_words");
     cout << "All tests passed" << endl;
     return 0;
 }

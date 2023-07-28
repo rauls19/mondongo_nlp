@@ -7,13 +7,18 @@
 #include <set>
 #include <map>
 #include <execution>
+#include <omp.h>
 
+// #include <cuda.h> future? download it
 #include "..\..\third_party\eigen3\Eigen\Sparse"
 #include "..\..\third_party\eigen3\Eigen\SparseCore"
 #include "..\..\third_party\eigen3\Eigen\Dense"
 
+#include ".\stop_words.cpp"
+
 using namespace Eigen;
 using namespace std;
+
 
 
 class BaseEstimatorText{
@@ -65,23 +70,17 @@ class Tokenizer{
     unordered_set<string> en_sw;
     const vector<string> valid_lang = {"en"};
 
-    void load_stopwords(string lang){
-        ifstream en_stopwords; en_stopwords.open("../stopwords_"+lang+".txt");
-        if(en_stopwords){
-            string line;
-            while(getline(en_stopwords, line)){
-                en_sw.insert(line);
-            }
-        }
-        else{
-            cerr << "Could not load English stopwords" << endl;
-        }
+    void load_stopwords(string lang, const unordered_set<string> &sw_custom){
+        if(sw_custom.empty())
+            en_sw = *sw_lang_map[lang];
+        else
+            en_sw = sw_custom;
     }
 
     vector<string> preprocess_sentence(const vector<string>& sentences){
         vector<string> preprocessed_sentences(sentences.size());
 
-        #pragma omp parallel for schedule(guided) num_threads(8)
+        #pragma omp parallel for schedule(guided) num_threads(omp_get_max_threads())
         for(size_t i = 0; i < sentences.size(); i++){
             string lowercase_line(sentences[i]);
             lowercase_line.erase(remove_if(lowercase_line.begin(), lowercase_line.end(), ::ispunct), lowercase_line.end());
@@ -92,9 +91,9 @@ class Tokenizer{
     }
 
     public:
-    Tokenizer(string lang="en"){
+    Tokenizer(const string& lang="en", const unordered_set<string>& sw_custom = {}){
         assert(find(valid_lang.begin(), valid_lang.end(), lang) != valid_lang.end() && "Stopwords requested are not supported");
-        load_stopwords(lang);
+        load_stopwords(lang, sw_custom);
     }
     
     vector<vector<string>> fit_transform(const vector<string>& sentences){
@@ -103,7 +102,7 @@ class Tokenizer{
         
         auto preprocessed_sentences = preprocess_sentence(sentences);
 
-        #pragma omp parallel for schedule(guided) num_threads(8)
+        #pragma omp parallel for schedule(guided) num_threads(omp_get_max_threads())
         for(const auto& line : preprocessed_sentences){
             istringstream is(line);
             string aux;
@@ -131,7 +130,7 @@ class Tokenizer{
 
 class TFIDF : public BaseEstimatorText {
     private:
-    string sw;
+    string sw_lang;
     //vector<unordered_map<string, double>> tf;
     SparseMatrix<double> _tf_idf_spm;
     double max_df = 1.0, min_df = 0.0;
@@ -140,7 +139,7 @@ class TFIDF : public BaseEstimatorText {
         size_t n_cols = tf_new.cols();
         VectorXd idf_new(n_cols); // TODO: SparseVector?
         idf_new.setZero();
-        #pragma omp parallel for schedule(guided) num_threads(8)
+        #pragma omp parallel for schedule(guided) num_threads(omp_get_max_threads())
         for(size_t i=0; i<n_cols; i++){
             int cnt = 0;
             for(SparseMatrix<double>::InnerIterator it(tf_new, i); it; ++it){
@@ -166,7 +165,7 @@ class TFIDF : public BaseEstimatorText {
     }
 
     SparseMatrix<double> term_freq_inverse_doc_freq(SparseMatrix<double> tf_spm, const VectorXd& idf_vxd){
-        #pragma omp parallel for schedule(guided) num_threads(8)
+        #pragma omp parallel for schedule(guided) num_threads(omp_get_max_threads())
         {
             for(size_t i=0; i<tf_spm.cols(); ++i){
                 for(SparseMatrix<double>::InnerIterator it(tf_spm, i); it; ++it){
@@ -179,11 +178,13 @@ class TFIDF : public BaseEstimatorText {
 
     public:
     VectorXd _idf;
+    unordered_set<string> sw_custom;
 
-    TFIDF(string stopwords="", double max_df=1.0, double min_df=0.0){
-        sw = stopwords;
+    TFIDF(string sw_lang="", unordered_set<string> sw_custom={}, double max_df=1.0, double min_df=0.0){
+        this->sw_lang = sw_lang;
         this->max_df = max_df;
         this->min_df = min_df;
+        this->sw_custom = sw_custom;
     }
 
     unordered_map<string, size_t> get_vocabulary(){ return vocabulary; }
@@ -198,7 +199,7 @@ class TFIDF : public BaseEstimatorText {
     }
 
     shared_ptr<SparseMatrix<double>> transform(const vector<string>& raw_document) override {
-        Tokenizer tokenizer = Tokenizer(sw);
+        Tokenizer tokenizer = Tokenizer(this->sw_lang, this->sw_custom);
         auto tokens = tokenizer.fit_transform(raw_document);
         set<string> vocab_keys;
         for(const auto& tok : tokens){
@@ -208,7 +209,7 @@ class TFIDF : public BaseEstimatorText {
 
         vector<unordered_map<string, double>> aux_tf;
         aux_tf.reserve(tokens.size());
-        #pragma omp parallel for schedule(guided) num_threads(8)
+        #pragma omp parallel for schedule(guided) num_threads(omp_get_max_threads())
         {
             for (size_t i=0; i < tokens.size(); i++) {
                 const auto& sentence = tokens.at(i);
@@ -246,16 +247,17 @@ class TFIDF : public BaseEstimatorText {
 
 class CountVectorizer : public BaseEstimatorText{
     private:
-    string sw;
+    string sw_lang;
     double max_df=1.0, min_df=0.0;
-    vector<unordered_map<string, double>> tf;
 
     public:
+    unordered_set<string> sw_custom;
 
-    CountVectorizer(string stopwords="", double max_df=1.0, double min_df=0.0){
-        this->sw = stopwords;
+    CountVectorizer(string sw_lang="", unordered_set<string> sw_custom={}, double max_df=1.0, double min_df=0.0){
+        this->sw_lang = sw_lang;
         this->max_df = max_df;
         this->min_df = min_df;
+        this->sw_custom = sw_custom;
     }
 
     CountVectorizer& fit(const vector<string>& raw_document){
@@ -277,7 +279,7 @@ class CountVectorizer : public BaseEstimatorText{
     }
 
     shared_ptr<SparseMatrix<double>> transform(const vector<string>& raw_document) override {
-        Tokenizer tokenizer = Tokenizer(this->sw);
+        Tokenizer tokenizer = Tokenizer(this->sw_lang, this->sw_custom);
         auto tokens = tokenizer.fit_transform(raw_document);
         set<string> vocab_keys;
         for(const auto& tok : tokens){
@@ -287,7 +289,7 @@ class CountVectorizer : public BaseEstimatorText{
 
         vector<unordered_map<string, double>> aux_tf;
         aux_tf.reserve(tokens.size());
-        #pragma omp parallel for schedule(guided) num_threads(8)
+        #pragma omp parallel for schedule(guided) num_threads(omp_get_max_threads())
         {
             for (size_t i=0; i < tokens.size(); i++) {
                 const auto& sentence = tokens.at(i);

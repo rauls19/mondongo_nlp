@@ -12,6 +12,8 @@ Trying to be scikit-learn but worse. From papers to code.
 
 - English
 
+*It is possible to add custom stop words, so it supports pretty much all languages. Only tested in English.
+
 ## Performance comparison:
 
 ### Specifications
@@ -40,7 +42,7 @@ mondongo_nlp:
 /* READ DATA */
 
 TFIDF tfidf = TFIDF("en");
-auto x = tfidf.fit_transform(corpus_file_b);
+auto x = *tfidf.fit_transform(corpus_file_b);
 ```
 
 ### Performance Results
@@ -50,7 +52,7 @@ For 393.736 documents:
 | Spec.                          | Exec. time   |
 | ---------                      | ------       |
 | TFIDF - scikit-learn           | 30s          |
-| TFIDF - mondongo_nlp           | 147s         |
+| TFIDF - mondongo_nlp           | 140s         |
 | CountVectorizer - scikit-learn | 21s          |
-| CountVectorizer - mondongo_nlp | 124s         |
+| CountVectorizer - mondongo_nlp | 118s         |
 
