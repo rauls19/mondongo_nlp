@@ -209,7 +209,6 @@ bool CountVectorizer_custom_stop_words(){
             if(x.coeffRef(i, j) != spm_res.coeffRef(i, j))
                 return false;
     return true;
-
 }
 
 int main(){

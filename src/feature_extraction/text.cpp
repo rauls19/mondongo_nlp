@@ -92,7 +92,10 @@ class Tokenizer{
 
     public:
     Tokenizer(const string& lang="en", const unordered_set<string>& sw_custom = {}){
-        assert(find(valid_lang.begin(), valid_lang.end(), lang) != valid_lang.end() && "Stopwords requested are not supported");
+        if(find(valid_lang.begin(), valid_lang.end(), lang) == valid_lang.end() && sw_custom.empty()){
+            cerr << "ERROR: Stopwords requested are not supported. Add custom stop words or use one of the predefined ones" << endl;
+            throw new exception();
+        }
         load_stopwords(lang, sw_custom);
     }
     

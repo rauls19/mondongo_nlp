@@ -12,13 +12,13 @@
 
 Tests done using test_performance.cpp.
 
-- Tokenizer time: 47 seconds
+- Tokenizer time: 42 seconds
 - unque keys time: 56 seconds
 - Create map time: 11 seconds
 - Generate tf time: 10 seconds
 - Move tf time: 0 seconds
 - convert to sparsematrix time: 8 seconds
-- Total time: 150 seconds
+- Total time: 140 seconds
 
 ## Interesting things
 
