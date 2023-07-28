@@ -327,7 +327,7 @@ const unordered_set<string> sw_en = {
     "yourselves",
 };
 
-const unordered_set<string> sw_es = { "hola", "esta", "semana"};
+const unordered_set<string> sw_es = {};
 
 map<string, const unordered_set<string>*> sw_lang_map = {
     {"en", &sw_en},
